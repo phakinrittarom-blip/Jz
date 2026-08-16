@@ -1,0 +1,253 @@
+-- 1. โหลด MacLib UI Library
+local MacLib = loadstring(game:HttpGet("https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"))()
+
+-- ตัวแปรระบบ Roblox
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+
+-- 2. สร้างหน้าต่างหลัก (Window)
+local Window = MacLib:Window({
+    Title = "phakin Hub",
+    Subtitle = "by phakin",
+    Size = UDim2.fromOffset(600, 400),
+    Dragable = true
+})
+
+-- ==========================================
+-- ปุ่มกดเปิด/ปิด หน้าต่าง UI (Toggle Button)
+-- ==========================================
+local isUIOpen = true
+local toggleScreen = Instance.new("ScreenGui")
+local toggleBtn = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
+
+toggleScreen.Name = "phakin_ToggleUI"
+toggleScreen.Parent = CoreGui
+toggleScreen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+toggleBtn.Name = "ToggleButton"
+toggleBtn.Parent = toggleScreen
+toggleBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+toggleBtn.Position = UDim2.new(0, 10, 0.5, -20)
+toggleBtn.Size = UDim2.new(0, 100, 0, 40)
+toggleBtn.Font = Enum.Font.SourceSansBold
+toggleBtn.Text = "เปิด/ปิด UI"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.TextSize = 16.000
+toggleBtn.Active = true
+toggleBtn.Draggable = true
+
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = toggleBtn
+
+-- ฟังก์ชันสลับการเปิด/ปิด UI
+local function toggleUI()
+    isUIOpen = not isUIOpen
+    Window:SetVisible(isUIOpen)
+end
+
+toggleBtn.MouseButton1Click:Connect(toggleUI)
+
+-- กดปุ่ม Left Control บนคีย์บอร์ดเพื่อ เปิด/ปิด UI
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.LeftControl then
+        toggleUI()
+    end
+end)
+
+-- ==========================================
+-- แท็บที่ 1: ผู้เล่น (Player)
+-- ==========================================
+local PlayerTab = Window:Tab({ Name = "ผู้เล่น (Player)", Icon = "rbxassetid://6031763426" })
+local PlayerSection = PlayerTab:Section({ Side = "Left" })
+
+PlayerSection:Slider({
+    Name = "ความเร็วเดิน (WalkSpeed)",
+    Min = 16,
+    Max = 200,
+    Default = 16,
+    Callback = function(v)
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = v
+        end
+    end
+})
+
+PlayerSection:Slider({
+    Name = "แรงกระโดด (JumpPower)",
+    Min = 50,
+    Max = 300,
+    Default = 50,
+    Callback = function(v)
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            hum.UseJumpPower = true
+            hum.JumpPower = v
+        end
+    end
+})
+
+PlayerSection:Button({
+    Name = "รีเซ็ตความเร็ว/การกระโดด",
+    Callback = function()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            hum.WalkSpeed = 16
+            hum.JumpPower = 50
+        end
+    end
+})
+
+-- ==========================================
+-- แท็บที่ 2: มองทะลุ (ESP)
+-- ==========================================
+local EspTab = Window:Tab({ Name = "มองทะลุ (ESP)", Icon = "rbxassetid://6031763426" })
+local EspSection = EspTab:Section({ Side = "Left" })
+local espEnabled = false
+
+local function createESP(plr)
+    if plr == LocalPlayer then return end
+    local function applyESP(chr)
+        if not chr then return end
+        local old = chr:FindFirstChild("phakin_ESP")
+        if old then old:Destroy() end
+
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "phakin_ESP"
+        highlight.FillColor = Color3.fromRGB(255, 0, 0)
+        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+        highlight.FillTransparency = 0.5
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Enabled = espEnabled
+        highlight.Parent = chr
+    end
+    if plr.Character then applyESP(plr.Character) end
+    plr.CharacterAdded:Connect(applyESP)
+end
+
+for _, plr in pairs(Players:GetPlayers()) do createESP(plr) end
+Players.PlayerAdded:Connect(createESP)
+
+EspSection:Toggle({
+    Name = "เปิดระบบมองทะลุ",
+    Default = false,
+    Callback = function(v)
+        espEnabled = v
+        for _, p in pairs(Players:GetPlayers()) do
+            if p.Character and p.Character:FindFirstChild("phakin_ESP") then
+                p.Character.phakin_ESP.Enabled = v
+            end
+        end
+    end
+})
+
+-- ==========================================
+-- แท็บที่ 3: วาร์ป & Fling (Teleport)
+-- ==========================================
+local TeleTab = Window:Tab({ Name = "วาร์ป (Teleport)", Icon = "rbxassetid://6031763426" })
+local TeleSection = TeleTab:Section({ Side = "Left" })
+
+local targetPlayerName = ""
+local flingEnabled = false
+
+local function getPlayerList()
+    local names = {}
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            table.insert(names, plr.Name)
+        end
+    end
+    if #names == 0 then table.insert(names, "ไม่มีผู้เล่นอื่น") end
+    return names
+end
+
+local playerDropdown = TeleSection:Dropdown({
+    Name = "เลือกผู้เล่นเป้าหมาย",
+    Items = getPlayerList(),
+    Callback = function(Selected)
+        targetPlayerName = Selected
+    end
+})
+
+TeleSection:Button({
+    Name = "รีเฟรชรายชื่อผู้เล่น",
+    Callback = function()
+        if playerDropdown and playerDropdown.Refresh then
+            playerDropdown:Refresh(getPlayerList())
+        end
+    end
+})
+
+TeleSection:Button({
+    Name = "วาร์ปไปหาผู้เล่นที่เลือก",
+    Callback = function()
+        local target = Players:FindFirstChild(targetPlayerName)
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame
+            end
+        end
+    end
+})
+
+TeleSection:Toggle({
+    Name = "วาร์ปชนกระเด็น (Fling Loop)",
+    Default = false,
+    Callback = function(Value)
+        flingEnabled = Value
+        if Value then
+            task.spawn(function()
+                while flingEnabled do
+                    task.wait()
+                    local target = Players:FindFirstChild(targetPlayerName)
+                    local myChar = LocalPlayer.Character
+                    
+                    if target and target.Character and myChar then
+                        local myHRP = myChar:FindFirstChild("HumanoidRootPart")
+                        local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
+                        
+                        if myHRP and targetHRP then
+                            myHRP.CFrame = targetHRP.CFrame
+                            myHRP.Velocity = Vector3.new(0, 999999, 0)
+                            myHRP.RotVelocity = Vector3.new(999999, 999999, 999999)
+                        end
+                    end
+                end
+                
+                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+                    LocalPlayer.Character.HumanoidRootPart.RotVelocity = Vector3.new(0, 0, 0)
+                end
+            end)
+        end
+    end
+})
+
+-- ==========================================
+-- แท็บที่ 4: ทั่วไป (Misc)
+-- ==========================================
+local MiscTab = Window:Tab({ Name = "ทั่วไป (Misc)", Icon = "rbxassetid://6031763426" })
+local MiscSection = MiscTab:Section({ Side = "Left" })
+local noclipEnabled = false
+
+MiscSection:Toggle({
+    Name = "เดินทะลุกำแพง (Noclip)",
+    Default = false,
+    Callback = function(v)
+        noclipEnabled = v
+    end
+})
+
+RunService.Stepped:Connect(function()
+    if noclipEnabled and LocalPlayer.Character then
+        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
